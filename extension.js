@@ -8,7 +8,8 @@ const vscode = require('vscode');
 
 function formatDocumentCpp(document) {
 	console.log("formatting in cpp:\n", document);
-	console.log("formatted in cpp:\n");
+	console.log("formatted in cpp:\n", document);
+	return document;
 }
 
 function formatDocumentYacc(document) {
