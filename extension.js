@@ -5,11 +5,18 @@ const vscode = require('vscode');
  * @param {vscode.TextDocument} document
  * @returns {vscode.TextEdit[]}
  */
+
+function formatDocumentCpp(document) {
+	console.log("formatting in cpp:\n", document);
+	console.log("formatted in cpp:\n");
+}
+
 function formatDocumentYacc(document) {
 	const edits = [];
 	const indentChar = '\t'; // Use tabs for indentation
 	let blockIndentLevel = 0; // Tracks the nesting level of %{ ... %} blocks
 	let insideCurlyBlock = false; // Tracks if inside { ... } blocks
+	let inProgressCodeBlock = ''; // Holds ongoing %{ ... %} content for splitting
 
 	for (let i = 0; i < document.lineCount; i++) {
 		const line = document.lineAt(i);
@@ -18,42 +25,44 @@ function formatDocumentYacc(document) {
 		// Skip empty lines
 		if (text === '') continue;
 
-		let formattedText = text;
+		let formattedLines = [];
 
-		// Handle block openings for %{
-		if (text.startsWith('%{') && !text.endsWith('%}')) {
-			// Ensure `%{` is on its own line
-			if (text.length > 2) {
-				formattedText = '%{\n' + indentChar.repeat(blockIndentLevel + 1) + text.slice(2).trim();
+		// Split line into parts based on %{ and %}
+		let parts = text.split(/(%{|%})/).filter(part => part !== '');
+
+		for (let part of parts) {
+			if (part === '%{') {
+				// Handle block opening for %{
+				if (inProgressCodeBlock !== '') {
+					// Flush in-progress code before starting a new block
+					formattedLines.push(`${indentChar.repeat(blockIndentLevel)}${formatDocumentCpp(inProgressCodeBlock.trim())}`);
+					inProgressCodeBlock = '';
+				}
+				formattedLines.push(`${indentChar.repeat(blockIndentLevel)}%{`);
+				blockIndentLevel++;
+			} else if (part === '%}') {
+				// Handle block closing for %}
+				if (inProgressCodeBlock !== '') {
+					// Flush in-progress code before closing the block
+					formattedLines.push(`${indentChar.repeat(blockIndentLevel)}${formatDocumentCpp(inProgressCodeBlock.trim())}`);
+					inProgressCodeBlock = '';
+				}
+				blockIndentLevel = Math.max(blockIndentLevel - 1, 0);
+				formattedLines.push(`${indentChar.repeat(blockIndentLevel)}%}`);
+			} else {
+				// Inside %{ ... %}, add indentation
+				inProgressCodeBlock += part.trim();
 			}
-			blockIndentLevel++;
-		} else if (text.startsWith('%{') && text.endsWith('%}')) {
-			// Convert `%{ abc%}` to multiline format
-			const content = text.slice(2, -2).trim();
-			formattedText = `%{\n${indentChar.repeat(blockIndentLevel + 1)}${content}\n%}`;
-		} else if (text.startsWith('%}')) {
-			// Handle block closings for %}
-			blockIndentLevel = Math.max(blockIndentLevel - 1, 0);
-			formattedText = `${indentChar.repeat(blockIndentLevel)}%}`;
-		} else if (blockIndentLevel > 0) {
-			// Indent code inside %{ ... %}
-			formattedText = `${indentChar.repeat(blockIndentLevel)}${text}`;
 		}
 
-		// Handle block openings for { ... }
-		if (text.startsWith('{') && !insideCurlyBlock) {
-			insideCurlyBlock = true;
+		// Add any remaining in-progress code
+		if (inProgressCodeBlock !== '') {
+			formattedLines.push(`${indentChar.repeat(blockIndentLevel)}${formatDocumentCpp(inProgressCodeBlock.trim())}`);
+			inProgressCodeBlock = '';
 		}
 
-		// Handle block closings for { ... }
-		if (text.startsWith('}') && insideCurlyBlock) {
-			insideCurlyBlock = false;
-		}
-
-		// Apply indentation for { ... } blocks
-		if (insideCurlyBlock) {
-			formattedText = `${indentChar}${text}`;
-		}
+		// Combine the formatted lines into a single string
+		const formattedText = formattedLines.join('\n');
 
 		// Add edit if the formatted text differs from the original
 		if (formattedText !== line.text) {
@@ -63,7 +72,6 @@ function formatDocumentYacc(document) {
 
 	return edits;
 }
-
 
 /**
  * Activate the extension.

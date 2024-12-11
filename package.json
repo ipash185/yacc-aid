@@ -35,10 +35,10 @@
     ],
     "configurationDefaults": {
       "[lex]": {
-        "editor.formatOnSave": true
+        "editor.formatOnSave": false
       },
       "[yacc]": {
-        "editor.formatOnSave": true
+        "editor.formatOnSave": false
       }
     },
     "formatters": [
