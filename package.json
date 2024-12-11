@@ -1,0 +1,68 @@
+{
+  "name": "yacc-aid",
+  "displayName": "YACC Aid",
+  "description": "Provides auto-indentation and organizing for Lex and YACC files.",
+  "version": "0.0.2",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:lex",
+    "onLanguage:yacc"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "yacc-aid.organise",
+        "title": "Organise YACC Code"
+      }
+    ],
+    "languages": [
+      {
+        "id": "lex",
+        "extensions": [".l"],
+        "aliases": ["Lex", "lex"]
+      },
+      {
+        "id": "yacc",
+        "extensions": [".y"],
+        "aliases": ["YACC", "yacc"]
+      }
+    ],
+    "configurationDefaults": {
+      "[lex]": {
+        "editor.formatOnSave": true
+      },
+      "[yacc]": {
+        "editor.formatOnSave": true
+      }
+    },
+    "formatters": [
+      {
+        "language": "lex",
+        "command": "yacc-aid.format"
+      },
+      {
+        "language": "yacc",
+        "command": "yacc-aid.format"
+      }
+    ]
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "pretest": "npm run lint",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.95.0",
+    "@types/mocha": "^10.0.9",
+    "@types/node": "20.x",
+    "eslint": "^9.13.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1"
+  }
+}
