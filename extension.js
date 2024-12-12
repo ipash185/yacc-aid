@@ -11,67 +11,81 @@ function formatDocumentCpp(document) {
 	console.log("formatted in cpp:\n", document);
 	return document;
 }
-
 function formatDocumentYacc(document) {
-	const edits = [];
-	const indentChar = '\t'; // Use tabs for indentation
-	let blockIndentLevel = 0; // Tracks the nesting level of %{ ... %} blocks
-	let insideCurlyBlock = false; // Tracks if inside { ... } blocks
-	let inProgressCodeBlock = ''; // Holds ongoing %{ ... %} content for splitting
+    const edits = [];
+    const indentChar = '\t'; // Use tabs for indentation
+    const splitTokens = ['%{', '%}', '%union', '%start', '%type', '%token', '%left', '%right', '%nonassoc', '%%'];
 
-	for (let i = 0; i < document.lineCount; i++) {
-		const line = document.lineAt(i);
-		let text = line.text.trim();
+    // Read the entire content of the document
+    let content = document.getText();
 
-		// Skip empty lines
-		if (text === '') continue;
+    // Split into meaningful parts while ignoring string literals
+    const parts = content.split(/((?<!["'])(?:%\{|%\}|%union|%start|%type|%token|%left|%right|%nonassoc|%%)(?!["']))/);
 
-		let formattedLines = [];
+    let formattedLines = [];
+    let blockIndentLevel = 0;
 
-		// Split line into parts based on %{ and %}
-		let parts = text.split(/(%{|%})/).filter(part => part !== '');
+	const CPP_CODE = Symbol('CPP_CODE');
+	const PRODUCTIONS = Symbol('PRODUCTIONS');
+	const OTHERS = Symbol('OTHERS');
 
-		for (let part of parts) {
-			if (part === '%{') {
-				// Handle block opening for %{
-				if (inProgressCodeBlock !== '') {
-					// Flush in-progress code before starting a new block
-					formattedLines.push(`${indentChar.repeat(blockIndentLevel)}${formatDocumentCpp(inProgressCodeBlock.trim())}`);
-					inProgressCodeBlock = '';
-				}
-				formattedLines.push(`${indentChar.repeat(blockIndentLevel)}%{`);
-				blockIndentLevel++;
-			} else if (part === '%}') {
-				// Handle block closing for %}
-				if (inProgressCodeBlock !== '') {
-					// Flush in-progress code before closing the block
-					formattedLines.push(`${indentChar.repeat(blockIndentLevel)}${formatDocumentCpp(inProgressCodeBlock.trim())}`);
-					inProgressCodeBlock = '';
-				}
-				blockIndentLevel = Math.max(blockIndentLevel - 1, 0);
-				formattedLines.push(`${indentChar.repeat(blockIndentLevel)}%}`);
-			} else {
-				// Inside %{ ... %}, add indentation
-				inProgressCodeBlock += part.trim();
+	let state = null;
+
+    for (const part of parts) {
+        const trimmedPart = part.trim();
+
+        if (trimmedPart === '%{') {
+			state = CPP_CODE;
+            formattedLines.push(`${indentChar.repeat(blockIndentLevel)}%{\n`);
+            blockIndentLevel++;
+        } else if (trimmedPart === '%}') {
+			state = null;
+            blockIndentLevel = Math.max(blockIndentLevel - 1, 0);
+            formattedLines.push(`${indentChar.repeat(blockIndentLevel)}%}\n`);
+        } else if (trimmedPart === '%union') {
+			state = CPP_CODE;
+			formattedLines.push(`\n${indentChar.repeat(blockIndentLevel)}%union\n`);
+        } else if (trimmedPart === '%%') {
+			if (state === null) {
+				state = PRODUCTIONS;
+			}
+			else {
+				state = CPP_CODE;
+			}
+			formattedLines.push(`\n\n${indentChar.repeat(blockIndentLevel)}%%\n\n`);
+		} else if (trimmedPart === '%start' || trimmedPart === '%type' || trimmedPart === '%token' || trimmedPart === '%left' || trimmedPart === '%right' || trimmedPart === '%nonassoc') {
+			state = OTHERS;
+			formattedLines.push(`\n${indentChar.repeat(blockIndentLevel)}${trimmedPart}\t`);
+		} else {
+			if (state === CPP_CODE) {
+				formattedLines.push(`${indentChar.repeat(blockIndentLevel)}${trimmedPart}\n`);
+			}
+			else if (state === PRODUCTIONS) {
+				formattedLines.push(`${indentChar.repeat(blockIndentLevel)}${trimmedPart}\n`);
+			}
+			else if (state === OTHERS) {
+				formattedLines.push(`${trimmedPart}\n`);
 			}
 		}
+    }
 
-		// Add any remaining in-progress code
-		if (inProgressCodeBlock !== '') {
-			formattedLines.push(`${indentChar.repeat(blockIndentLevel)}${formatDocumentCpp(inProgressCodeBlock.trim())}`);
-			inProgressCodeBlock = '';
-		}
+    // Join formatted lines into a single string
+    const formattedContent = formattedLines.join('');
 
-		// Combine the formatted lines into a single string
-		const formattedText = formattedLines.join('\n');
+    // Replace the entire document if changes are detected
+    if (formattedContent !== content) {
+        const fullRange = new vscode.Range(
+            document.lineAt(0).range.start,
+            document.lineAt(document.lineCount - 1).range.end
+        );
+        edits.push(vscode.TextEdit.replace(fullRange, formattedContent));
+    }
 
-		// Add edit if the formatted text differs from the original
-		if (formattedText !== line.text) {
-			edits.push(vscode.TextEdit.replace(line.range, formattedText));
-		}
-	}
+    return edits;
+}
 
-	return edits;
+function organiseYACC() {
+	console.log("hi");
 }
 
 /**
@@ -79,7 +93,12 @@ function formatDocumentYacc(document) {
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
+
 	console.log('YACC Aid is now active!');
+	const organiseCommand = vscode.commands.registerCommand(
+		'yacc-aid.organise',
+		organiseYACC
+	);
 
 	// Register the formatter for Lex
 	const lexFormatter = vscode.languages.registerDocumentFormattingEditProvider(
@@ -101,7 +120,7 @@ function activate(context) {
 		}
 	);
 
-	context.subscriptions.push(lexFormatter, yaccFormatter);
+	context.subscriptions.push(organiseCommand, lexFormatter, yaccFormatter);
 }
 
 /**
